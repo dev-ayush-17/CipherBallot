@@ -1,0 +1,194 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CipherBallot Design System ─── */
+
+/* Base Resets */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #111827;
+  background-color: #F9FAFB;
+  min-height: 100vh;
+}
+
+/* ─── Protocol Typography ─── */
+
+@layer components {
+  /* Brand heading — serif, large, tracked */
+  .protocol-heading {
+    @apply font-brand font-black tracking-wide text-terminal-black;
+  }
+
+  /* Label style — uppercase, tracked, small */
+  .protocol-label {
+    @apply font-body font-semibold text-xs uppercase tracking-protocol text-terminal-grey;
+  }
+
+  /* Data display — monospace for hashes, addresses, timestamps */
+  .protocol-data {
+    @apply font-mono text-sm text-terminal-black;
+  }
+
+  /* ─── Protocol Containers ─── */
+
+  /* Bordered institutional container */
+  .protocol-card {
+    @apply bg-white border border-terminal-black/20 relative;
+  }
+
+  /* Stronger bordered container (like the auth card) */
+  .protocol-card-strong {
+    @apply bg-white border-2 border-terminal-black relative;
+  }
+
+  /* ─── Protocol Buttons ─── */
+
+  /* Primary action — blue filled */
+  .btn-protocol-primary {
+    @apply inline-flex items-center justify-center gap-2 
+           bg-protocol-blue text-white font-body font-semibold 
+           text-sm uppercase tracking-protocol 
+           px-8 py-4 
+           transition-all duration-200 
+           hover:bg-protocol-blue-hover 
+           active:scale-[0.98]
+           focus:outline-none focus:ring-2 focus:ring-protocol-blue focus:ring-offset-2;
+  }
+
+  /* Secondary action — black outlined */
+  .btn-protocol-secondary {
+    @apply inline-flex items-center justify-center gap-2 
+           bg-white text-terminal-black font-body font-semibold 
+           text-sm uppercase tracking-protocol 
+           border-2 border-terminal-black 
+           px-8 py-4 
+           transition-all duration-200 
+           hover:bg-terminal-black hover:text-white 
+           active:scale-[0.98]
+           focus:outline-none focus:ring-2 focus:ring-terminal-black focus:ring-offset-2;
+  }
+
+  /* Danger / halt action — red */
+  .btn-protocol-danger {
+    @apply inline-flex items-center justify-center gap-2 
+           bg-status-halted text-white font-body font-semibold 
+           text-sm uppercase tracking-protocol 
+           px-8 py-4 
+           transition-all duration-200 
+           hover:bg-red-700 
+           active:scale-[0.98];
+  }
+
+  /* ─── Status Badges ─── */
+
+  .badge-active {
+    @apply inline-flex items-center px-3 py-1 
+           text-xs font-semibold uppercase tracking-wider 
+           bg-green-50 text-status-active border border-status-active/30 
+           rounded-sm;
+  }
+
+  .badge-pending {
+    @apply inline-flex items-center px-3 py-1 
+           text-xs font-semibold uppercase tracking-wider 
+           bg-gray-50 text-terminal-grey border border-terminal-grey/30 
+           rounded-sm;
+  }
+
+  .badge-halted {
+    @apply inline-flex items-center px-3 py-1 
+           text-xs font-semibold uppercase tracking-wider 
+           bg-red-50 text-status-halted border border-status-halted/30 
+           rounded-sm;
+  }
+
+  /* ─── Protocol Dividers ─── */
+
+  .protocol-divider {
+    @apply w-full h-px bg-terminal-black/15;
+  }
+
+  .protocol-divider-strong {
+    @apply w-full h-0.5 bg-terminal-black;
+  }
+
+  /* ─── Table Styles ─── */
+
+  .protocol-table {
+    @apply w-full border-collapse;
+  }
+
+  .protocol-table thead {
+    @apply border-b-2 border-terminal-black;
+  }
+
+  .protocol-table th {
+    @apply text-left py-3 px-4 font-semibold text-xs uppercase tracking-protocol text-terminal-grey;
+  }
+
+  .protocol-table td {
+    @apply py-4 px-4 text-sm border-b border-gray-100;
+  }
+
+  .protocol-table tbody tr {
+    @apply transition-colors duration-150 hover:bg-gray-50/80;
+  }
+
+  /* ─── Scrollbar ─── */
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #9ca3af;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
+}
+
+/* ─── Animations ─── */
+
+@keyframes terminal-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.terminal-cursor::after {
+  content: '█';
+  animation: terminal-blink 1s step-end infinite;
+  color: #111827;
+  margin-left: 2px;
+}
+
+/* Live clock pulse for the status dot */
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+}
+
+.status-dot-live {
+  animation: status-pulse 2s ease-in-out infinite;
+}

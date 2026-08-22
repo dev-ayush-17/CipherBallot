@@ -5,6 +5,7 @@ import Footer from './components/Common/Footer';
 import Home from './pages/Home';
 import VoterDashboard from './pages/VoterDashboard';
 import Results from './pages/Results';
+import AdminDashboard from './pages/AdminDashboard';
 import './App.css';
 
 /*
@@ -58,6 +59,10 @@ export default function App() {
                 <Results />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/admin"
+            element={<AdminDashboard />}
           />
         </Routes>
       </main>

@@ -59,6 +59,60 @@ const googleCallback = (req, res, next) => {
 };
 
 /**
+ * @route   POST /api/auth/login
+ * @desc    Mock SSO Login for students (testing without Google OAuth)
+ * @access  Public
+ * @body    { email, password }
+ */
+const mockStudentLogin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return sendError(res, 'Email and password are required', 400);
+  }
+
+  // Find or create student (mocking SSO behavior)
+  let student = await Student.findOne({ email });
+  
+  if (!student) {
+    // For mock testing, just create the student if they don't exist
+    // In production, Google OAuth handles this
+    const username = email.split('@')[0];
+    student = await Student.create({
+      username: username,
+      email: email,
+      rollNumber: `ROLL-${Math.floor(1000 + Math.random() * 9000)}`,
+      cgpa: 8.5, // Default for testing
+    });
+    console.log(`[Mock SSO] Created new student: ${email}`);
+  }
+
+  // Generate JWT
+  const token = generateToken({
+    id: student._id,
+    email: student.email,
+    role: 'student',
+  });
+
+  sendSuccess(
+    res,
+    {
+      token,
+      student: {
+        id: student._id,
+        username: student.username,
+        email: student.email,
+        rollNumber: student.rollNumber,
+        isWalletLinked: student.isWalletLinked,
+        walletAddress: student.walletAddress,
+      },
+    },
+    200,
+    'Login successful'
+  );
+});
+
+/**
  * @route   POST /api/auth/link-wallet
  * @desc    Link MetaMask wallet to student account
  * @access  Private (Student)
@@ -228,6 +282,7 @@ const getMe = asyncHandler(async (req, res) => {
 module.exports = {
   googleAuth,
   googleCallback,
+  mockStudentLogin,
   linkWallet,
   adminLogin,
   adminRegister,

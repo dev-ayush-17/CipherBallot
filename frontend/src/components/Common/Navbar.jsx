@@ -28,6 +28,7 @@ export default function Navbar({ account, isConnected, onConnect, onDisconnect }
     { path: '/', label: 'Elections' },
     { path: '/dashboard', label: 'Proposals' },
     { path: '/results', label: 'Archives' },
+    { path: '/admin', label: 'Admin' },
   ];
 
   return (

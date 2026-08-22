@@ -16,6 +16,10 @@ const {
 router.get('/google', googleAuth);
 router.get('/google/callback', googleCallback);
 
+// ─── Mock SSO Login (For testing without Google OAuth) ──────────────────────
+router.post('/login', require('../controllers/authController').mockStudentLogin);
+
+
 // ─── Wallet Linking ─────────────────────────────────────────────────────────
 router.post(
   '/link-wallet',

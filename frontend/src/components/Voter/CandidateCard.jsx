@@ -90,7 +90,7 @@ export default function CandidateCard({ candidate, onVote, hasVoted, disabled })
             disabled={hasVoted || disabled}
             className="w-full btn-protocol-primary py-3 text-xs"
           >
-            {hasVoted ? 'Ballot Cast' : 'Review Full Audit'}
+            {hasVoted ? 'Ballot Cast' : 'See Profile'}
           </button>
         </div>
       </div>
@@ -137,7 +137,7 @@ export default function CandidateCard({ candidate, onVote, hasVoted, disabled })
         disabled={hasVoted || disabled}
         className="w-full btn-protocol-secondary py-3 text-xs"
       >
-        Compare Profiles
+        {hasVoted ? 'Ballot Cast' : 'See Profile'}
       </button>
     </div>
   );

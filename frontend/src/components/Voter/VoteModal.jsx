@@ -78,20 +78,34 @@ export default function VoteModal({
 
           {/* Candidate Info */}
           <div>
-            <p className="protocol-label mb-1">Candidate Selected</p>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                <svg className="w-5 h-5 text-terminal-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-                  />
-                </svg>
+            <p className="protocol-label mb-1">Candidate Profile</p>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 border-2 border-terminal-black/20 relative overflow-hidden">
+                {candidate.portraitUrl ? (
+                  <img src={candidate.portraitUrl} alt={candidate.name} className="w-full h-full object-cover grayscale" />
+                ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-terminal-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                    </svg>
+                  </div>
+                )}
               </div>
               <div>
-                <p className="font-semibold text-terminal-black">{candidate.name}</p>
-                <p className="text-xs text-terminal-grey">{candidate.department}</p>
+                <p className="font-brand font-black text-xl text-terminal-black">{candidate.name}</p>
+                <p className="text-xs font-bold text-protocol-blue">{candidate.role || 'Candidate'}</p>
               </div>
             </div>
+            
+            <div className="bg-gray-50 p-4 border border-terminal-black/10 text-sm text-terminal-grey italic leading-relaxed whitespace-pre-wrap">
+              {candidate.manifesto}
+            </div>
+
+            {candidate.manifestoPhotoUrl && (
+              <div className="mt-4 border border-terminal-black/10">
+                <img src={candidate.manifestoPhotoUrl} alt="Manifesto" className="w-full h-auto max-h-64 object-cover" />
+              </div>
+            )}
           </div>
 
           <div className="protocol-divider" />

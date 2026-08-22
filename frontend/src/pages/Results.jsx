@@ -1,389 +1,284 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import useMetaMask from '../hooks/useMetaMask';
 import useVotingContract from '../hooks/useVotingContract';
 
 /*
- * Results.jsx — Ledger & Live Vote Distribution Dashboard
- * Redesigned to match the "CIVIC TERMINAL / LEDGER" layout.
- *
- * Features:
- *   - Consistency sidebar with menu items (Ledger active)
- *   - Node status strip: Active status, Block sync ID
- *   - Network Metrics cards: Ballots cast, turnout, live epoch countdown
- *   - Live Ledger Feed: Dynamic interval simulating incoming blockchain blocks
- *   - Live Vote Distribution progress bars for Julian A. Vane and Elena Rossi
- *   - Integrated Ballot Receipt certificate in an interactive modal overlay
+ * Results.jsx — Election Results Dashboard
+ * Connected to real on-chain data via useVotingContract.
+ * Shows bar chart + pie chart + candidate breakdown with live vote counts.
  */
 
-/* ─── Mock results data matching the inspiration ─── */
-const MOCK_TOTAL_BALLOTS = 1245892;
-const MOCK_TURNOUT = 68.4;
-const MOCK_CANDIDATE_VOTES = [
-  { id: 1, name: 'Julian A. Vane', votes: 675273, delegates: 1420, fillClass: 'bg-protocol-blue', pct: 54.2 },
-  { id: 2, name: 'Elena Rossi', votes: 570619, delegates: 1185, fillClass: 'bg-slate-500', pct: 45.8 }
-];
+const CHART_COLORS = ['#1a1a1a', '#3B82F6', '#6366F1', '#EC4899', '#F59E0B', '#10B981', '#8B5CF6'];
 
 export default function Results() {
-  const { account, isConnected } = useMetaMask();
+  const { account } = useMetaMask();
   const {
-    candidates: contractCandidates,
-    electionName: contractElectionName,
-    hasVoted,
-    totalVotesCast: contractTotalVotes,
-    txHash: contractTxHash,
+    elections,
+    currentElection,
+    currentElectionId,
+    selectElection,
+    candidates,
+    electionPhase,
+    electionName,
+    loading,
+    getResults,
   } = useVotingContract(account);
 
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [countdown, setCountdown] = useState({ hours: 4, minutes: 12, seconds: 45 });
-  const [blocks, setBlocks] = useState([
-    { status: 'VERIFIED', hash: '0x8f4c...9a2b', time: '12s ago', isPending: false },
-    { status: 'VERIFIED', hash: '0x3e1d...7c4f', time: '45s ago', isPending: false },
-    { status: 'VERIFIED', hash: '0x9a8b...2d1e', time: '1m 12s ago', isPending: false },
-    { status: 'PENDING', hash: '0x5f6g...8h9i', time: '1m 30s ago', isPending: true },
-    { status: 'VERIFIED', hash: '0x1a2b...3c4d', time: '2m 05s ago', isPending: false }
-  ]);
+  const [resultsData, setResultsData] = useState({ names: [], voteCounts: [] });
 
-  /* ─── Live Epoch countdown timer ─── */
+  // Fetch results on mount / election change
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        }
-        return { hours: 4, minutes: 12, seconds: 45 }; // Reset epoch loop
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    const fetchResults = async () => {
+      const data = await getResults();
+      setResultsData(data);
+    };
+    if (currentElectionId) {
+      fetchResults();
+    }
+  }, [currentElectionId, getResults]);
 
-  /* ─── Live block feed generator simulation ─── */
-  useEffect(() => {
-    const blockTimer = setInterval(() => {
-      // Simulate adding a block/transaction
-      const hex = '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(2, 6);
-      setBlocks((prev) => {
-        const list = [...prev];
-        // Resolve previously pending block
-        const pendingIdx = list.findIndex((b) => b.isPending);
-        if (pendingIdx !== -1) {
-          list[pendingIdx] = { ...list[pendingIdx], status: 'VERIFIED', isPending: false, time: '1s ago' };
-        }
-        // Add new pending block
-        list.unshift({ status: 'PENDING', hash: hex, time: 'just now', isPending: true });
-        // Cap feed size
-        return list.slice(0, 6);
-      });
-    }, 15000);
-    return () => clearInterval(blockTimer);
-  }, []);
+  // Build chart data
+  const chartData = useMemo(() => {
+    if (candidates.length > 0) {
+      return candidates.map((c, i) => ({
+        name: c.name,
+        votes: c.voteCount,
+        fill: CHART_COLORS[i % CHART_COLORS.length],
+      }));
+    }
+    if (resultsData.names.length > 0) {
+      return resultsData.names.map((name, i) => ({
+        name,
+        votes: resultsData.voteCounts[i] || 0,
+        fill: CHART_COLORS[i % CHART_COLORS.length],
+      }));
+    }
+    return [];
+  }, [candidates, resultsData]);
 
-  /* ─── Determine layout details ─── */
-  const electionName = contractElectionName || '2024 Global Council Assembly';
-  const totalVotes = contractTotalVotes || MOCK_TOTAL_BALLOTS;
-  const txHash = contractTxHash || '0x7F9c2eB...a1d94...4f1B9c';
-  const timestamp = new Date().toISOString();
+  const totalVotes = useMemo(() => chartData.reduce((sum, d) => sum + d.votes, 0), [chartData]);
 
-  const formattedCountdown = `${countdown.hours.toString().padStart(2, '0')}h ${countdown.minutes.toString().padStart(2, '0')}m ${countdown.seconds.toString().padStart(2, '0')}s`;
+  const winner = useMemo(() => {
+    if (chartData.length === 0) return null;
+    return chartData.reduce((max, c) => (c.votes > max.votes ? c : max), chartData[0]);
+  }, [chartData]);
+
+  const pieData = useMemo(() => {
+    if (totalVotes === 0) return [];
+    return chartData.map((d) => ({
+      ...d,
+      percentage: ((d.votes / totalVotes) * 100).toFixed(1),
+    }));
+  }, [chartData, totalVotes]);
 
   return (
-    <div className="flex min-h-[calc(100vh-112px)]">
-      {/* ─── Sidebar ─── */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col justify-between">
-        <div>
-          {/* Header block */}
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-base font-brand font-bold text-terminal-black">
-              Institutional ID
-            </h2>
-            <p className="text-[10px] font-mono text-terminal-grey mt-0.5">Verified Delegate</p>
+    <div className="min-h-screen bg-terminal-light">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* ─── Header ─── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="protocol-heading text-4xl leading-none">Results Ledger</h1>
+            <p className="text-sm text-terminal-grey mt-2">
+              {currentElection
+                ? `${currentElection.name} — ${electionPhase} Phase`
+                : 'No election data available'}
+            </p>
           </div>
-
-          {/* Sidebar Tabs */}
-          <nav className="p-4 space-y-1">
+          <div className="flex items-center gap-3">
+            {elections.length > 1 && (
+              <select
+                value={currentElectionId || ''}
+                onChange={(e) => selectElection(Number(e.target.value))}
+                className="text-xs font-mono border border-terminal-black/15 px-3 py-2 focus:outline-none focus:border-terminal-black"
+              >
+                {elections.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <Link
               to="/dashboard"
-              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-protocol text-terminal-grey hover:text-terminal-black hover:bg-gray-50 transition-colors"
+              className="btn-protocol-secondary text-xs px-4 py-2"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-              </svg>
-              Dashboard
+              ← Back to Dashboard
             </Link>
-            <Link
-              to="/dashboard"
-              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-protocol text-terminal-grey hover:text-terminal-black hover:bg-gray-50 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />
-              </svg>
-              Analytics
-            </Link>
-            <button
-              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-protocol bg-protocol-blue text-white transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-              </svg>
-              Ledger
-            </button>
-            <button
-              className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-protocol text-terminal-grey hover:text-terminal-black hover:bg-gray-50 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
-              Resources
-            </button>
-          </nav>
-        </div>
-
-        {/* Bottom Actions */}
-        <div className="p-4 border-t border-gray-200 space-y-4">
-          <button className="w-full btn-protocol-primary py-3 text-[10px]">
-            Initiate Proposal
-          </button>
-          <div className="flex justify-between text-[11px] text-terminal-grey px-2">
-            <a href="#help" className="hover:text-terminal-black">Help Center</a>
-            <span>•</span>
-            <a href="#support" className="hover:text-terminal-black">Support</a>
           </div>
         </div>
-      </aside>
 
-      {/* ─── Main Content ─── */}
-      <main className="flex-1 p-6 lg:p-8 max-w-5xl space-y-8 animate-fade-in">
-        {/* Node Status Sub-header strip */}
-        <div className="protocol-card border-terminal-black/20 p-3 flex flex-col sm:flex-row items-center justify-between text-xs font-mono gap-3 bg-white">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-green-700 rounded-sm inline-block" />
-            <span className="font-bold text-terminal-black">Node Status: Active</span>
-          </div>
-          <span className="text-terminal-grey uppercase">Mainnet Synchronized</span>
-          <span className="text-terminal-black">Block: #894,122</span>
-        </div>
+        <div className="protocol-divider-strong mb-8" />
 
-        {/* Voter receipt quick action (if voted) */}
-        {hasVoted && (
-          <div className="protocol-card p-4 border-protocol-blue/30 bg-blue-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-protocol-blue" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <div>
-                <p className="text-xs font-bold text-terminal-black uppercase tracking-protocol">Your Ballot Receipt is Ready</p>
-                <p className="text-[11px] text-terminal-grey mt-0.5">Secure, cryptographically signed ledger certificate.</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsReceiptModalOpen(true)}
-              className="btn-protocol-secondary py-2 px-5 text-[10px] w-full sm:w-auto"
-            >
-              View Receipt Certificate
-            </button>
+        {/* ─── Loading ─── */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-protocol-blue border-t-transparent rounded-full animate-spin" />
+            <span className="ml-4 text-sm text-terminal-grey">Loading results from blockchain...</span>
           </div>
         )}
 
-        {/* Network Metrics & Live Ledger Feed Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Network Metrics Container */}
-          <div className="md:col-span-2 space-y-6">
-            <h2 className="text-lg font-brand font-black text-terminal-black">
-              Network Metrics
-            </h2>
+        {/* ─── No data ─── */}
+        {!loading && chartData.length === 0 && (
+          <div className="protocol-card p-12 bg-white text-center">
+            <svg className="w-16 h-16 mx-auto text-terminal-grey/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            </svg>
+            <p className="text-sm text-terminal-grey">No results available yet.</p>
+            <p className="text-xs text-terminal-grey/60 mt-1">Results will appear once candidates are registered and votes are cast.</p>
+          </div>
+        )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Total Ballots Cast */}
-              <div className="protocol-card bg-white p-5 space-y-2">
-                <p className="protocol-label text-[9px]">Total Ballots Cast</p>
-                <p className="font-mono text-3xl font-black text-terminal-black">
-                  {totalVotes.toLocaleString()}
-                </p>
+        {/* ─── Results Content ─── */}
+        {!loading && chartData.length > 0 && (
+          <div className="space-y-8">
+            {/* Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="protocol-card bg-white p-5">
+                <p className="text-[10px] font-mono uppercase tracking-protocol text-terminal-grey">Total Votes</p>
+                <p className="font-mono text-3xl font-black text-terminal-black mt-1">{totalVotes}</p>
               </div>
-
-              {/* Network Turnout */}
-              <div className="protocol-card bg-white p-5 space-y-2">
-                <p className="protocol-label text-[9px]">Network Turnout</p>
-                <p className="font-mono text-3xl font-black text-terminal-black">
-                  {MOCK_TURNOUT}%
-                </p>
+              <div className="protocol-card bg-white p-5">
+                <p className="text-[10px] font-mono uppercase tracking-protocol text-terminal-grey">Candidates</p>
+                <p className="font-mono text-3xl font-black text-terminal-black mt-1">{chartData.length}</p>
               </div>
-
-              {/* Next Epoch Countdown */}
-              <div className="protocol-card bg-white p-5 space-y-2">
-                <p className="protocol-label text-[9px]">Next Epoch In</p>
-                <p className="font-mono text-xl font-bold text-terminal-black mt-1">
-                  {formattedCountdown}
-                </p>
+              <div className="protocol-card bg-white p-5">
+                <p className="text-[10px] font-mono uppercase tracking-protocol text-terminal-grey">Phase</p>
+                <p className={`font-mono text-xl font-black mt-1 ${
+                  electionPhase === 'Active' ? 'text-green-600' : electionPhase === 'Ended' ? 'text-terminal-black' : 'text-amber-600'
+                }`}>{electionPhase}</p>
+              </div>
+              <div className="bg-protocol-blue text-white p-5">
+                <p className="text-[10px] font-mono uppercase tracking-protocol opacity-80">Leading</p>
+                <p className="font-mono text-lg font-black mt-1 truncate">{winner?.name || '—'}</p>
+                <p className="text-xs opacity-75">{winner?.votes || 0} votes</p>
               </div>
             </div>
-          </div>
 
-          {/* Live Ledger Feed List */}
-          <div className="protocol-card bg-white p-5 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between border-b border-terminal-black/10 pb-3 mb-3">
-                <h3 className="text-xs font-bold uppercase tracking-protocol text-terminal-black">
-                  Live Ledger Feed
-                </h3>
-                <span className="w-2.5 h-2.5 bg-protocol-blue rounded-sm animate-pulse-slow" />
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Bar Chart */}
+              <div className="protocol-card bg-white p-6 lg:col-span-2">
+                <h3 className="text-sm font-bold text-terminal-black uppercase tracking-protocol mb-6">Vote Distribution</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#666' }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#666' }} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, border: '1px solid #1a1a1a', borderRadius: 0 }}
+                    />
+                    <Bar dataKey="votes" radius={[2, 2, 0, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`bar-${index}`} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
 
-              {/* Feed items */}
-              <div className="space-y-3">
-                {blocks.map((block, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-[11px] font-mono border-b border-gray-50 pb-2">
-                    <div className="flex items-center gap-1.5">
-                      {block.isPending ? (
-                        <span className="w-1.5 h-1.5 rounded-full bg-status-pending status-dot-live" />
-                      ) : (
-                        <svg className="w-3.5 h-3.5 text-status-active" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                      <span className={`font-semibold uppercase ${block.isPending ? 'text-status-pending' : 'text-status-active'}`}>
-                        {block.status}
-                      </span>
-                      <span className="text-terminal-black">{block.hash}</span>
+              {/* Pie Chart */}
+              <div className="protocol-card bg-white p-6">
+                <h3 className="text-sm font-bold text-terminal-black uppercase tracking-protocol mb-6">Vote Share</h3>
+                {totalVotes > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={2}
+                          dataKey="votes"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`pie-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [`${value} votes`, name]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 space-y-2">
+                      {pieData.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3" style={{ backgroundColor: d.fill }} />
+                            <span className="font-semibold text-terminal-black truncate max-w-[120px]">{d.name}</span>
+                          </div>
+                          <span className="font-mono text-terminal-grey">{d.percentage}%</span>
+                        </div>
+                      ))}
                     </div>
-                    <span className="text-terminal-grey">{block.time}</span>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-[200px]">
+                    <p className="text-xs text-terminal-grey">No votes cast yet</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
-            <a
-              href="#ledger"
-              className="text-center text-[10px] font-semibold uppercase tracking-protocol text-terminal-grey hover:text-terminal-black underline mt-4 block"
-            >
-              View Full Ledger
-            </a>
-          </div>
-        </div>
-
-        {/* Live Vote Distribution */}
-        <div className="protocol-card bg-white p-6 space-y-6">
-          <div className="border-b border-terminal-black/10 pb-4">
-            <h2 className="text-base font-brand font-black text-terminal-black">
-              Live Vote Distribution
-            </h2>
-          </div>
-
-          <div className="space-y-6">
-            {MOCK_CANDIDATE_VOTES.map((cand) => (
-              <div key={cand.id} className="space-y-2">
-                <div className="flex justify-between items-end text-sm">
-                  <span className="font-brand font-black text-lg text-terminal-black">{cand.name}</span>
-                  <span className="font-mono font-bold text-protocol-blue">{cand.pct}%</span>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full h-8 bg-gray-100 border border-terminal-black/15 overflow-hidden">
-                  <div
-                    className={`h-full ${cand.fillClass} transition-all duration-1000`}
-                    style={{ width: `${cand.pct}%` }}
-                  />
-                </div>
-
-                <div className="flex justify-between text-xs text-terminal-grey font-mono">
-                  <span>Votes: {cand.votes.toLocaleString()}</span>
-                  <span>Delegates: {cand.delegates.toLocaleString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Institutional Footer Copyright */}
-        <div className="pt-6 border-t border-gray-200">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-            <p className="font-semibold text-terminal-black uppercase tracking-protocol">
-              Cipherballot Protocol V4.2.0
-            </p>
-            <div className="flex gap-6 text-terminal-grey">
-              <a href="#" className="hover:text-terminal-black">Protocol Whitepaper</a>
-              <a href="#" className="hover:text-terminal-black">Legal Disclosure</a>
-              <a href="#" className="hover:text-terminal-black">Privacy Policy</a>
-              <a href="#" className="hover:text-terminal-black">System Status</a>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* ─── Receipt Modal overlay (Voter digital receipt) ─── */}
-      {isReceiptModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-terminal-black/50" onClick={() => setIsReceiptModalOpen(false)} />
-          <div className="relative bg-white border-2 border-terminal-black w-full max-w-2xl p-6 sm:p-10 animate-slide-up">
-            {/* Close */}
-            <button
-              onClick={() => setIsReceiptModalOpen(false)}
-              className="absolute top-4 right-4 text-terminal-grey hover:text-terminal-black"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            {/* Receipt certificate content */}
-            <div className="border border-dashed border-terminal-black/20 p-6 sm:p-8">
-              <div className="flex justify-center mb-6">
-                <div className="w-12 h-12 rounded-full border-2 border-protocol-blue flex items-center justify-center">
-                  <svg className="w-6 h-6 text-protocol-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-
-              <div className="text-center mb-6">
-                <h1 className="protocol-heading text-2xl sm:text-3xl">BALLOT SUCCESSFULLY CAST</h1>
-                <p className="text-xs text-terminal-grey mt-2 italic">Official Digital Certificate of Participation</p>
-              </div>
-
-              <div className="protocol-divider-strong mb-6" />
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2 space-y-4 text-left">
-                  <div>
-                    <p className="protocol-label text-[8px] mb-1">Election</p>
-                    <p className="protocol-data font-semibold text-sm border border-terminal-black/10 px-3 py-2 bg-gray-50">{electionName}</p>
-                  </div>
-                  <div>
-                    <p className="protocol-label text-[8px] mb-1">Candidate Selected</p>
-                    <p className="protocol-data font-semibold text-sm border border-terminal-black/10 px-3 py-2 bg-gray-50">Julian A. Vane</p>
-                  </div>
-                  <div>
-                    <p className="protocol-label text-[8px] mb-1">Transaction Hash</p>
-                    <p className="protocol-data text-[10px] border border-terminal-black/10 px-3 py-2 bg-gray-50 break-all font-mono">{txHash}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center gap-4">
-                  <p className="protocol-label text-[8px]">Verification Key</p>
-                  <div className="border border-terminal-black/10 p-2 bg-white inline-block">
-                    <QRCodeSVG value={`cipherballot://verify?tx=${txHash}`} size={100} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="protocol-divider mt-6 mb-4" />
-
-              <div className="flex gap-4">
-                <button className="btn-protocol-primary flex-1 py-3 text-xs">[Download PDF Receipt]</button>
-                <button className="btn-protocol-secondary flex-1 py-3 text-xs">[View on Ledger]</button>
+            {/* Candidate Breakdown Table */}
+            <div className="protocol-card bg-white p-6">
+              <h3 className="text-sm font-bold text-terminal-black uppercase tracking-protocol mb-4">Candidate Breakdown</h3>
+              <div className="protocol-divider mb-4" />
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left text-[10px] font-mono uppercase tracking-protocol text-terminal-grey border-b border-gray-200">
+                      <th className="pb-3 pr-4">#</th>
+                      <th className="pb-3 pr-4">Candidate</th>
+                      <th className="pb-3 pr-4">CGPA</th>
+                      <th className="pb-3 pr-4 text-right">Votes</th>
+                      <th className="pb-3 text-right">Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData
+                      .sort((a, b) => b.votes - a.votes)
+                      .map((candidate, idx) => {
+                        const matchingCandidate = candidates.find((c) => c.name === candidate.name);
+                        return (
+                          <tr key={idx} className="border-b border-gray-100 last:border-0">
+                            <td className="py-3 pr-4 font-mono text-xs text-terminal-grey">
+                              {String(idx + 1).padStart(2, '0')}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className="w-3 h-3 flex-shrink-0"
+                                  style={{ backgroundColor: candidate.fill }}
+                                />
+                                <span className="text-sm font-semibold text-terminal-black">{candidate.name}</span>
+                                {idx === 0 && totalVotes > 0 && (
+                                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 bg-protocol-blue text-white">
+                                    Leading
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 pr-4 font-mono text-xs text-terminal-grey">
+                              {matchingCandidate?.cgpa || '—'}
+                            </td>
+                            <td className="py-3 pr-4 text-right font-mono text-sm font-bold text-terminal-black">
+                              {candidate.votes}
+                            </td>
+                            <td className="py-3 text-right font-mono text-xs text-terminal-grey">
+                              {totalVotes > 0 ? `${((candidate.votes / totalVotes) * 100).toFixed(1)}%` : '0%'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
-
-

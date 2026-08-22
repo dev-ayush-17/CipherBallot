@@ -8,48 +8,21 @@ import VoteModal from '../components/Voter/VoteModal';
 /*
  * VoterDashboard.jsx — Student Voting Panel
  * Redesigned to implement the "Voter Matrix (Minimal)" layout.
- *
- * Features:
- *   - Left sidebar with Voter Profile photo, ID (882-X94-22), and menu items (Voter Identity fingerprint active)
- *   - Main layout matching institutional layout: "Voter Matrix (Minimal)" header + explanation
- *   - Grid listing Julian A. Vane (incumbent horizontal) and Elena Rossi (challenger vertical)
- *   - Network Health widget (99.9% integrity score)
- *   - Policy Alignment Matrix table comparing stance checkboxes
+ * Now connected to real on-chain data via useVotingContract.
  */
-
-/* ─── Mock candidate data with specific matrix profile fields ─── */
-const MOCK_MATRIX_CANDIDATES = [
-  {
-    id: 1,
-    name: 'Julian A. Vane',
-    role: 'INCUMBENT / DISTRICT 04',
-    cgpa: '3.92 / 4.00',
-    manifesto: '"Our future depends on the resilience of our decentralized energy grid and the absolute protection of digital privacy as a fundamental human right."',
-    tags: ['Economy / Resilience+', 'Rights / Privacy First'],
-    portraitUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
-    isActive: true,
-    isIncumbent: true,
-  },
-  {
-    id: 2,
-    name: 'Elena Rossi',
-    role: 'CHALLENGER / DISTRICT 04',
-    cgpa: '3.88 / 4.00',
-    manifesto: '"Advocating for hyper-local governance and educational reform via the civic terminal\'s..."',
-    tags: ['Governance / Hyper-local', 'Reform / Education'],
-    portraitUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=400',
-    isActive: true,
-    isIncumbent: false,
-  },
-];
 
 export default function VoterDashboard() {
   const { account, isConnected, disconnectWallet } = useMetaMask();
   const {
-    candidates: contractCandidates,
-    electionState,
+    elections,
+    currentElection,
+    currentElectionId,
+    selectElection,
+    candidates,
+    electionPhase,
     electionName,
     hasVoted,
+    isWhitelisted,
     loading,
     txStatus,
     txHash,
@@ -63,25 +36,43 @@ export default function VoterDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Voter Identity');
 
-  /* ─── Integrate contract candidates or mock matrix candidates ─── */
-  const candidates = useMemo(() => {
-    if (contractCandidates.length > 0) {
-      // Map contract data, using mock fields for tags & portraits
-      return contractCandidates.map((c, i) => {
-        const mockMatch = MOCK_MATRIX_CANDIDATES.find((mc) => mc.name === c.name || mc.id === c.id);
-        return {
-          ...c,
-          role: mockMatch?.role || (c.isActive ? 'CANDIDATE / ACTIVE' : 'CANDIDATE / INACTIVE'),
-          cgpa: mockMatch?.cgpa || '3.50 / 4.00',
-          manifesto: mockMatch?.manifesto || '"No manifesto details submitted."',
-          tags: mockMatch?.tags || ['Policy / Standard', 'Stance / Neutral'],
-          portraitUrl: mockMatch?.portraitUrl || '',
-          isIncumbent: mockMatch?.isIncumbent || i === 0, // Fallback first item to incumbent
-        };
-      });
-    }
-    return MOCK_MATRIX_CANDIDATES;
-  }, [contractCandidates]);
+  const displayCandidates = useMemo(() => {
+    if (candidates.length === 0) return [];
+    
+    // Fallback portraits if none provided
+    const portraitPool = [
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
+      'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=400',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400',
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=400',
+    ];
+
+    return candidates.map((c, i) => {
+      let manifestoData = { text: '', photoUrl: '', manifestoPhotoUrl: '' };
+      
+      try {
+        if (c.manifestoURI) {
+          const parsed = JSON.parse(c.manifestoURI);
+          manifestoData = parsed;
+        }
+      } catch (e) {
+        // If it's not JSON, it might be an old string URL
+        manifestoData.text = c.manifestoURI;
+      }
+
+      const finalPortrait = manifestoData.photoUrl || portraitPool[i % portraitPool.length];
+
+      return {
+        ...c,
+        role: i === 0 ? 'INCUMBENT' : 'CHALLENGER',
+        portraitUrl: finalPortrait,
+        manifestoPhotoUrl: manifestoData.manifestoPhotoUrl || null,
+        tags: [`CGPA: ${c.cgpa}`, manifestoData.text ? 'Has Manifesto' : 'No Manifesto'],
+        manifesto: manifestoData.text || 'No manifesto submitted.',
+        isIncumbent: i === 0,
+      };
+    });
+  }, [candidates]);
 
   /* ─── Sidebar menu list ─── */
   const sidebarItems = [
@@ -114,15 +105,6 @@ export default function VoterDashboard() {
       ),
     },
     {
-      id: 'Legal Resources',
-      label: 'Legal Resources',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-        </svg>
-      ),
-    },
-    {
       id: 'Security Audit',
       label: 'Security Audit',
       icon: (
@@ -137,6 +119,12 @@ export default function VoterDashboard() {
   const formatAddress = (addr) => {
     if (!addr) return '0x0000...0000';
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  /* ─── Format timestamp ─── */
+  const formatTime = (ts) => {
+    if (!ts) return 'N/A';
+    return new Date(ts * 1000).toLocaleString();
   };
 
   /* ─── Open vote modal ─── */
@@ -181,19 +169,14 @@ export default function VoterDashboard() {
       >
         {/* Voter Identity Profile Block */}
         <div className="p-6 border-b border-gray-200 flex flex-col items-center text-center">
-          {/* Circular Greyscale Profile Photo */}
-          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-terminal-black mb-3">
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200"
-              alt="Student Voter Profile"
-              className="w-full h-full object-cover grayscale contrast-125"
-              onError={(e) => { e.target.src = 'https://via.placeholder.com/150'; }}
-            />
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-terminal-black mb-3 bg-gray-200 flex items-center justify-center">
+            <svg className="w-8 h-8 text-terminal-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
           </div>
           <h2 className="text-base font-brand font-bold text-terminal-black">
             Verified Voter
           </h2>
-          <p className="text-[10px] font-mono text-terminal-grey mt-0.5">ID: 882-X94-22</p>
 
           {/* Connection Status Badge */}
           {isConnected && (
@@ -204,7 +187,34 @@ export default function VoterDashboard() {
               </span>
             </div>
           )}
+
+          {/* Whitelist Status */}
+          {currentElectionId && (
+            <div className={`mt-2 text-[10px] font-mono uppercase tracking-wide ${isWhitelisted ? 'text-green-600' : 'text-amber-600'}`}>
+              {isWhitelisted ? '✓ Whitelisted' : '⚠ Not Whitelisted'}
+            </div>
+          )}
         </div>
+
+        {/* Election Selector */}
+        {elections.length > 1 && (
+          <div className="px-4 py-3 border-b border-gray-200">
+            <label className="text-[10px] font-mono uppercase tracking-protocol text-terminal-grey block mb-1">
+              Election
+            </label>
+            <select
+              value={currentElectionId || ''}
+              onChange={(e) => selectElection(Number(e.target.value))}
+              className="w-full text-xs font-mono border border-terminal-black/15 px-2 py-1.5 focus:outline-none focus:border-terminal-black"
+            >
+              {elections.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} ({e.phase})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Nav Items */}
         <nav className="flex-1 p-4 space-y-1">
@@ -260,89 +270,126 @@ export default function VoterDashboard() {
 
       {/* ─── Main Content ─── */}
       <main className="flex-1 p-6 lg:p-8 max-w-5xl">
-        {/* ─── Tab-Specific Content rendering ─── */}
         {activeTab === 'Voter Identity' ? (
           <div className="space-y-8 animate-fade-in">
-            {/* Header section matching Voter Matrix */}
+            {/* Header */}
             <div>
               <h1 className="protocol-heading text-4xl leading-none">Voter Matrix</h1>
               <p className="text-sm text-terminal-grey mt-3 leading-relaxed max-w-2xl">
-                Verify candidate stances, legislative history, and policy proposals through the 
-                immutable ledger. Every node represents a verifiable fact checked against the CipherBallot Protocol.
+                {currentElection
+                  ? `${currentElection.name} — ${currentElection.phase} Phase`
+                  : 'No elections found. Waiting for admin to create one.'}
               </p>
+              {currentElection && (
+                <div className="flex flex-wrap gap-4 mt-3 text-[10px] font-mono text-terminal-grey uppercase">
+                  <span>Start: {formatTime(currentElection.startTime)}</span>
+                  <span>End: {formatTime(currentElection.endTime)}</span>
+                  <span>Candidates: {currentElection.candidateCount}</span>
+                  <span className={`font-bold ${electionPhase === 'Active' ? 'text-green-600' : electionPhase === 'Ended' ? 'text-red-500' : 'text-amber-600'}`}>
+                    {electionPhase}
+                  </span>
+                </div>
+              )}
               <div className="protocol-divider-strong mt-6" />
             </div>
 
+            {/* No election state */}
+            {!currentElection && !loading && (
+              <div className="protocol-card p-8 bg-white text-center">
+                <svg className="w-12 h-12 mx-auto text-terminal-grey/40 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                </svg>
+                <p className="text-sm text-terminal-grey">No elections have been created yet.</p>
+                <p className="text-xs text-terminal-grey/60 mt-1">An admin must create an election first.</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 animate-slide-up">
+                <svg className="w-5 h-5 text-status-halted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m9.303 3.376c-.866 1.5.217 3.374 1.948 3.374H4.075c1.73 0 2.813-1.874 1.948-3.374L10.05 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <p className="text-xs text-status-halted">{error}</p>
+              </div>
+            )}
+
             {/* Candidate Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {loading ? (
-                <div className="md:col-span-3 flex items-center justify-center py-12">
-                  <div className="w-6 h-6 border-2 border-protocol-blue border-t-transparent rounded-full animate-spin" />
-                  <span className="ml-3 text-sm text-terminal-grey">Loading matrix nodes...</span>
-                </div>
-              ) : (
-                candidates.map((candidate) => (
-                  <CandidateCard
-                    key={candidate.id}
-                    candidate={candidate}
-                    onVote={handleVoteClick}
-                    hasVoted={hasVoted}
-                    disabled={electionState === 'ENDED' || electionState === 'NOT_STARTED'}
-                  />
-                ))
-              )}
-            </div>
-
-            {/* Bottom widgets section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Network Health Card */}
-              <div className="bg-protocol-blue text-white p-6 relative flex flex-col justify-between min-h-[160px]">
-                <p className="text-[10px] font-bold uppercase tracking-protocol opacity-80">
-                  Network Health
-                </p>
-                <h3 className="font-mono text-5xl font-black mt-2">
-                  99.9 <span className="text-2xl font-semibold opacity-90">%</span>
-                </h3>
-                <p className="text-[10px] uppercase tracking-wide opacity-75 mt-auto">
-                  Integrity score based on 4.2M blocks
-                </p>
+            {currentElection && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {loading ? (
+                  <div className="md:col-span-3 flex items-center justify-center py-12">
+                    <div className="w-6 h-6 border-2 border-protocol-blue border-t-transparent rounded-full animate-spin" />
+                    <span className="ml-3 text-sm text-terminal-grey">Loading candidates...</span>
+                  </div>
+                ) : displayCandidates.length > 0 ? (
+                  displayCandidates.map((candidate) => (
+                    <CandidateCard
+                      key={candidate.id}
+                      candidate={candidate}
+                      onVote={handleVoteClick}
+                      hasVoted={hasVoted}
+                      disabled={electionPhase !== 'Active' || !isWhitelisted}
+                    />
+                  ))
+                ) : (
+                  <div className="md:col-span-3 text-center py-12">
+                    <p className="text-sm text-terminal-grey">No candidates registered yet.</p>
+                  </div>
+                )}
               </div>
+            )}
 
-              {/* Policy Alignment Matrix */}
-              <div className="protocol-card bg-white p-6 md:col-span-2 space-y-4">
-                <h3 className="text-sm font-bold text-terminal-black uppercase tracking-protocol">
-                  Policy Alignment Matrix
-                </h3>
-                <div className="protocol-divider" />
-                <div className="space-y-3">
-                  {/* Stance rows */}
-                  {[
-                    { label: 'Housing Stability', boxes: [true, false] },
-                    { label: 'Decentralized Infrastructure', boxes: [true, true] },
-                    { label: 'Privacy Handshake Protocol', boxes: [false, true] },
-                  ].map((row, idx) => (
-                    <div key={idx} className="flex items-center justify-between py-1 text-xs">
-                      <span className="font-semibold text-terminal-black">{row.label}</span>
-                      <div className="flex gap-2">
-                        {row.boxes.map((active, boxIdx) => (
-                          <span
-                            key={boxIdx}
-                            className={`w-6 h-6 border transition-colors ${
-                              active
-                                ? 'bg-protocol-blue border-protocol-blue'
-                                : 'bg-gray-100 border-terminal-black/10'
-                            }`}
-                          />
-                        ))}
+            {/* Bottom widgets */}
+            {currentElection && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Election Status Card */}
+                <div className="bg-protocol-blue text-white p-6 relative flex flex-col justify-between min-h-[160px]">
+                  <p className="text-[10px] font-bold uppercase tracking-protocol opacity-80">
+                    Election Status
+                  </p>
+                  <h3 className="font-mono text-3xl font-black mt-2">
+                    {electionPhase}
+                  </h3>
+                  <p className="text-[10px] uppercase tracking-wide opacity-75 mt-auto">
+                    {displayCandidates.length} candidates • {hasVoted ? 'Vote Cast ✓' : 'Vote Pending'}
+                  </p>
+                </div>
+
+                {/* Voter Status Card */}
+                <div className="protocol-card bg-white p-6 md:col-span-2 space-y-4">
+                  <h3 className="text-sm font-bold text-terminal-black uppercase tracking-protocol">
+                    Your Voter Status
+                  </h3>
+                  <div className="protocol-divider" />
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Wallet Connected', status: isConnected },
+                      { label: 'Whitelisted for Election', status: isWhitelisted },
+                      { label: 'Vote Cast', status: hasVoted },
+                    ].map((row, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-1 text-xs">
+                        <span className="font-semibold text-terminal-black">{row.label}</span>
+                        <span className={`w-6 h-6 border flex items-center justify-center transition-colors ${
+                          row.status
+                            ? 'bg-protocol-blue border-protocol-blue text-white'
+                            : 'bg-gray-100 border-terminal-black/10'
+                        }`}>
+                          {row.status && (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          )}
+                        </span>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
-          /* Placeholder/Fallback for other tab items */
+          /* Placeholder for other tabs */
           <div className="space-y-6 animate-fade-in">
             <div>
               <h1 className="protocol-heading text-3xl">{activeTab}</h1>
@@ -360,16 +407,16 @@ export default function VoterDashboard() {
                     Information Node
                   </p>
                   <p className="text-xs text-terminal-grey mt-1">
-                    Details for the {activeTab} section are being processed on-chain. Current state is synchronized with the Ledger.
+                    Details for the {activeTab} section are being processed on-chain.
                   </p>
                 </div>
               </div>
 
-              {activeTab === 'Ballot Status' && (
+              {activeTab === 'Ballot Status' && currentElection && (
                 <div className="space-y-3">
                   <div className="p-4 border border-terminal-black/15">
                     <p className="protocol-label text-[10px]">Election</p>
-                    <p className="protocol-data text-sm font-semibold">{electionName || '2024 Global Council Assembly'}</p>
+                    <p className="protocol-data text-sm font-semibold">{electionName}</p>
                     <p className="protocol-label text-[10px] mt-3">Status</p>
                     <span className={hasVoted ? 'badge-active' : 'badge-pending'}>
                       {hasVoted ? 'BALLOT CAST' : 'PENDING ACTION'}
@@ -381,22 +428,15 @@ export default function VoterDashboard() {
           </div>
         )}
 
-        {/* Footer Copyright */}
+        {/* Footer */}
         <div className="mt-12 pt-6 border-t border-gray-200">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <p className="text-xs font-semibold text-terminal-black">
-              © 2024 Cipherballot Institutional. Immutable Voting Protocol.
+              © 2026 CipherBallot Institutional. Immutable Voting Protocol.
             </p>
             <div className="flex gap-6">
-              <a href="#" className="text-xs text-terminal-grey hover:text-terminal-black transition-colors">
-                Privacy Policy
-              </a>
-              <a href="#" className="text-xs text-terminal-grey hover:text-terminal-black transition-colors">
-                Terms of Service
-              </a>
-              <a href="#" className="text-xs text-terminal-grey hover:text-terminal-black transition-colors">
-                Security Whitepaper
-              </a>
+              <a href="#" className="text-xs text-terminal-grey hover:text-terminal-black transition-colors">Privacy Policy</a>
+              <a href="#" className="text-xs text-terminal-grey hover:text-terminal-black transition-colors">Terms of Service</a>
             </div>
           </div>
         </div>
@@ -406,7 +446,7 @@ export default function VoterDashboard() {
       <VoteModal
         isOpen={isModalOpen}
         candidate={selectedCandidate}
-        electionName={electionName || '2024 Global Council Assembly'}
+        electionName={electionName || 'Election'}
         txStatus={txStatus}
         txHash={txHash}
         error={error}
@@ -416,4 +456,3 @@ export default function VoterDashboard() {
     </div>
   );
 }
-

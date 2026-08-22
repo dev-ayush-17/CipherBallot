@@ -60,10 +60,10 @@ api.interceptors.response.use(
  */
 export const login = async (email, password) => {
   const response = await api.post('/auth/login', { email, password });
-  if (response.data.token) {
-    localStorage.setItem('cipherballot_token', response.data.token);
+  if (response.data.data?.token) {
+    localStorage.setItem('cipherballot_token', response.data.data.token);
   }
-  return response.data;
+  return response.data.data;
 };
 
 /**

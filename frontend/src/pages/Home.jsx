@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ethers } from 'ethers';
+import api, { login } from '../utils/api';
 import useMetaMask from '../hooks/useMetaMask';
 
 /*
@@ -42,16 +44,65 @@ export default function Home() {
   const [ssoEmail, setSsoEmail] = useState('');
   const [ssoPassword, setSsoPassword] = useState('');
   const [ssoError, setSsoError] = useState(null);
+  const [backendUser, setBackendUser] = useState(null);
+  const [isLinking, setIsLinking] = useState(false);
 
   /* ─── Handle MetaMask connection and redirect ─── */
   const handleDigitalAuth = async () => {
+    if (!backendUser) {
+      setSsoError("Please authenticate via Institutional Email first.");
+      setSsoMode(true);
+      return;
+    }
     await connectWallet();
   };
 
-  /* ─── SSO Login handler (placeholder) ─── */
-  const handleSSOLogin = (e) => {
+  /* ─── Handle Wallet Linking once connected ─── */
+  useEffect(() => {
+    const linkWallet = async () => {
+      if (isConnected && account && backendUser && !backendUser.isWalletLinked && !isLinking) {
+        setIsLinking(true);
+        try {
+          // Ask user to sign a message to prove ownership
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await provider.getSigner();
+          const message = `CipherBallot: I verify ownership of this wallet for voting purposes.\nTimestamp: ${Date.now()}`;
+          const signature = await signer.signMessage(message);
+
+          // Send to backend to link
+          await api.post('/auth/link-wallet', {
+            walletAddress: account,
+            signature,
+            message
+          });
+
+          // Redirect to dashboard
+          setTimeout(() => navigate('/dashboard'), 1000);
+        } catch (err) {
+          console.error("Wallet linking failed", err);
+          setSsoError("Failed to verify wallet ownership. Please try again.");
+          setIsLinking(false);
+        }
+      } else if (isConnected && account && backendUser?.isWalletLinked) {
+        // Already linked, just redirect
+        setTimeout(() => navigate('/dashboard'), 800);
+      }
+    };
+
+    linkWallet();
+  }, [isConnected, account, backendUser, isLinking, navigate]);
+
+  /* ─── SSO Login handler (Mock) ─── */
+  const handleSSOLogin = async (e) => {
     e.preventDefault();
-    setSsoError('SSO integration pending. Backend connection required (Member 2).');
+    setSsoError(null);
+    try {
+      const response = await login(ssoEmail, ssoPassword);
+      setBackendUser(response.student);
+      setSsoMode(false); // Switch back to wallet connection view
+    } catch (err) {
+      setSsoError(err.response?.data?.error || 'Authentication failed');
+    }
   };
 
   return (
@@ -138,6 +189,24 @@ export default function Home() {
                     </p>
                     <p className="font-mono text-xs text-green-600 mt-0.5">
                       {account.slice(0, 10)}...{account.slice(-8)}
+                    </p>
+                    {isLinking && <p className="text-xs text-status-active mt-1">Verifying ownership signature...</p>}
+                  </div>
+                </div>
+              )}
+              
+              {/* ─── Logged In State (Backend) ─── */}
+              {backendUser && !isConnected && (
+                <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 animate-slide-up">
+                  <svg className="w-5 h-5 text-protocol-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <div>
+                    <p className="text-xs font-semibold text-protocol-blue uppercase tracking-wide">
+                      Identity Verified
+                    </p>
+                    <p className="font-mono text-xs text-blue-700 mt-0.5">
+                      {backendUser.email}
                     </p>
                   </div>
                 </div>
@@ -243,17 +312,19 @@ export default function Home() {
                   </div>
 
                   {/* ─── SSO / Physical Credential Button ─── */}
-                  <button
-                    onClick={() => setSsoMode(true)}
-                    className="btn-protocol-secondary w-full"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                        d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"
-                      />
-                    </svg>
-                    Access Via Physical Credential
-                  </button>
+                  {!backendUser && (
+                    <button
+                      onClick={() => setSsoMode(true)}
+                      className="btn-protocol-secondary w-full"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                          d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"
+                        />
+                      </svg>
+                      Access Via Physical Credential
+                    </button>
+                  )}
                 </>
               )}
 

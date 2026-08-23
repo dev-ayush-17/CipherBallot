@@ -19,11 +19,14 @@ export default function AdminDashboard() {
   const { account, isConnected, connectWallet } = useMetaMask();
   const {
     checkIsAdmin,
+    checkIsOwner,
     createElection,
     startElection,
     endElection,
     registerCandidate,
     whitelistVoters,
+    addAdmin,
+    removeAdmin,
     resetTx,
     loading: adminLoading,
     txStatus,
@@ -43,10 +46,12 @@ export default function AdminDashboard() {
   } = useVotingContract(account);
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   const [backendAdmin, setBackendAdmin] = useState(null);
   const [activeSection, setActiveSection] = useState('elections');
   const [successMsg, setSuccessMsg] = useState('');
+  const [adminAddressForm, setAdminAddressForm] = useState('');
 
   // ─── Backend Login form state ─────────────────────────────────────────
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -85,11 +90,15 @@ export default function AdminDashboard() {
       if (account) {
         const admin = await checkIsAdmin();
         setIsAdmin(admin);
+        
+        const owner = await checkIsOwner();
+        setIsOwner(owner);
+        
         setAdminChecked(true);
       }
     };
     check();
-  }, [account, checkIsAdmin]);
+  }, [account, checkIsAdmin, checkIsOwner]);
 
   // ─── Auto-clear success message ───────────────────────────────────────
   useEffect(() => {
@@ -100,6 +109,34 @@ export default function AdminDashboard() {
   }, [successMsg]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
+
+  const handleAddAdmin = async (e) => {
+    e.preventDefault();
+    resetTx();
+    if (!adminAddressForm.startsWith('0x') || adminAddressForm.length !== 42) {
+      alert('Please enter a valid Ethereum address.');
+      return;
+    }
+    const result = await addAdmin(adminAddressForm);
+    if (result) {
+      setSuccessMsg(`Address ${adminAddressForm} is now an Admin!`);
+      setAdminAddressForm('');
+    }
+  };
+
+  const handleRemoveAdmin = async (e) => {
+    e.preventDefault();
+    resetTx();
+    if (!adminAddressForm.startsWith('0x') || adminAddressForm.length !== 42) {
+      alert('Please enter a valid Ethereum address.');
+      return;
+    }
+    const result = await removeAdmin(adminAddressForm);
+    if (result) {
+      setSuccessMsg(`Address ${adminAddressForm} is no longer an Admin.`);
+      setAdminAddressForm('');
+    }
+  };
 
   const handleBackendLogin = async (e) => {
     e.preventDefault();
@@ -348,6 +385,9 @@ export default function AdminDashboard() {
     { id: 'candidates', label: 'Candidates', icon: '👤' },
     { id: 'whitelist', label: 'Whitelist', icon: '📋' },
   ];
+  if (isOwner) {
+    sections.push({ id: 'management', label: 'Admin Mgmt', icon: '⚙️' });
+  }
 
   return (
     <div className="min-h-screen bg-terminal-light">
@@ -627,6 +667,36 @@ export default function AdminDashboard() {
                 <button type="submit" disabled={adminLoading} className="btn-protocol-primary px-8 py-3">
                   {adminLoading ? 'Whitelisting...' : 'Whitelist Voters (On-Chain)'}
                 </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Management Section ─── */}
+        {activeSection === 'management' && isOwner && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="protocol-card bg-white p-6">
+              <h3 className="text-sm font-bold text-terminal-black uppercase tracking-protocol mb-4">Manage Admins (On-Chain)</h3>
+              <div className="protocol-divider mb-4" />
+              <form className="space-y-4">
+                <div>
+                  <label className="protocol-label text-[10px] block mb-1">New or Existing Admin MetaMask Address</label>
+                  <input
+                    type="text"
+                    value={adminAddressForm}
+                    onChange={(e) => setAdminAddressForm(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full px-4 py-3 border border-terminal-black/15 font-mono text-sm focus:outline-none focus:border-terminal-black"
+                  />
+                </div>
+                <div className="flex gap-4">
+                  <button type="button" onClick={handleAddAdmin} disabled={adminLoading} className="btn-protocol-primary px-8 py-3 flex-1">
+                    {adminLoading ? 'Processing...' : 'Add Admin'}
+                  </button>
+                  <button type="button" onClick={handleRemoveAdmin} disabled={adminLoading} className="px-8 py-3 flex-1 bg-red-600 text-white font-semibold uppercase tracking-wider text-xs hover:bg-red-700 transition-colors">
+                    {adminLoading ? 'Processing...' : 'Remove Admin'}
+                  </button>
+                </div>
               </form>
             </div>
           </div>

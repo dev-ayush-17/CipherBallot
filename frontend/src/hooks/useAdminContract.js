@@ -60,6 +60,18 @@ export default function useAdminContract(account) {
     }
   }, [contracts, account]);
 
+  // ─── Check if account is owner ────────────────────────────────────────
+  const checkIsOwner = useCallback(async () => {
+    if (!contracts || !account) return false;
+    try {
+      const em = await contracts.getElectionManagerRead();
+      const owner = await em.owner();
+      return owner.toLowerCase() === account.toLowerCase();
+    } catch {
+      return false;
+    }
+  }, [contracts, account]);
+
   // ─── Create Election ──────────────────────────────────────────────────
   const createElection = useCallback(
     async (name, startTime, endTime) => {
@@ -215,13 +227,68 @@ export default function useAdminContract(account) {
     [contracts]
   );
 
+  // ─── Add Admin ────────────────────────────────────────────────────────
+  const addAdmin = useCallback(
+    async (adminAddress) => {
+      if (!contracts) return false;
+      try {
+        setLoading(true);
+        setTxStatus('pending');
+        setError(null);
+
+        const em = await contracts.getElectionManager();
+        const tx = await em.addAdmin(adminAddress);
+        setTxHash(tx.hash);
+        const receipt = await tx.wait();
+        setTxStatus(receipt.status === 1 ? 'confirmed' : 'failed');
+        return receipt.status === 1;
+      } catch (err) {
+        setTxStatus('failed');
+        setError(err.reason || 'Failed to add admin');
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [contracts]
+  );
+
+  // ─── Remove Admin ─────────────────────────────────────────────────────
+  const removeAdmin = useCallback(
+    async (adminAddress) => {
+      if (!contracts) return false;
+      try {
+        setLoading(true);
+        setTxStatus('pending');
+        setError(null);
+
+        const em = await contracts.getElectionManager();
+        const tx = await em.removeAdmin(adminAddress);
+        setTxHash(tx.hash);
+        const receipt = await tx.wait();
+        setTxStatus(receipt.status === 1 ? 'confirmed' : 'failed');
+        return receipt.status === 1;
+      } catch (err) {
+        setTxStatus('failed');
+        setError(err.reason || 'Failed to remove admin');
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [contracts]
+  );
+
   return {
     checkIsAdmin,
+    checkIsOwner,
     createElection,
     startElection,
     endElection,
     registerCandidate,
     whitelistVoters,
+    addAdmin,
+    removeAdmin,
     resetTx,
     loading,
     txStatus,

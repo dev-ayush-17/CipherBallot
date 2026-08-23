@@ -5,6 +5,7 @@ import {
   VOTING_CONTRACT_ADDRESS,
   ELECTION_MANAGER_ABI,
   VOTING_ABI,
+  SEPOLIA_RPC_URL,
 } from '../utils/contracts';
 
 /**
@@ -24,6 +25,7 @@ export default function useAdminContract(account) {
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
+      const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
       return {
         getElectionManager: async () => {
           const signer = await provider.getSigner();
@@ -34,7 +36,7 @@ export default function useAdminContract(account) {
           return new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, signer);
         },
         getElectionManagerRead: async () => {
-          return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, provider);
+          return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, readProvider);
         },
       };
     } catch (err) {
@@ -54,8 +56,12 @@ export default function useAdminContract(account) {
     if (!contracts || !account) return false;
     try {
       const em = await contracts.getElectionManagerRead();
-      return await em.admins(account);
-    } catch {
+      console.log("[DEBUG] Checking admin status for:", account, "on contract:", await em.getAddress());
+      const result = await em.admins(account);
+      console.log("[DEBUG] Admin result from contract:", result);
+      return result;
+    } catch (err) {
+      console.error("[DEBUG] checkIsAdmin failed with error:", err);
       return false;
     }
   }, [contracts, account]);

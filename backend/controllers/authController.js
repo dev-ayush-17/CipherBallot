@@ -79,7 +79,7 @@ const mockStudentLogin = asyncHandler(async (req, res) => {
     // In production, Google OAuth handles this
     const username = email.split('@')[0];
     student = await Student.create({
-      username: username,
+      name: username,
       email: email,
       rollNumber: `ROLL-${Math.floor(1000 + Math.random() * 9000)}`,
       cgpa: 8.5, // Default for testing

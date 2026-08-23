@@ -12,8 +12,8 @@ import { useState, useEffect, useCallback } from 'react';
  *   const { account, chainId, isConnected, isConnecting, error, connectWallet, disconnectWallet } = useMetaMask();
  */
 
-const SUPPORTED_CHAIN_ID = '0xaa36a7'; // Sepolia testnet (11155111 in hex)
-const SUPPORTED_CHAIN_NAME = 'Sepolia';
+const SUPPORTED_CHAIN_ID = '0x7a69'; // Hardhat local network (31337 in hex)
+const SUPPORTED_CHAIN_NAME = 'Hardhat';
 
 export default function useMetaMask() {
   const [account, setAccount] = useState(null);

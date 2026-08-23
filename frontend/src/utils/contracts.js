@@ -7,11 +7,11 @@
 // ─── Deployed Addresses (Sepolia) ───────────────────────────────────────────
 export const ELECTION_MANAGER_ADDRESS =
   import.meta.env.VITE_ELECTION_MANAGER_ADDRESS ||
-  '0x6b6066967553A3e217d2d98A2702434e5486D840';
+  '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
 export const VOTING_CONTRACT_ADDRESS =
   import.meta.env.VITE_VOTING_CONTRACT_ADDRESS ||
-  '0xe6e85995Da1290376541218272CAd335e975C77b';
+  '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 
 // ─── ElectionManager ABI ────────────────────────────────────────────────────
 export const ELECTION_MANAGER_ABI = [

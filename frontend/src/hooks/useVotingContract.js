@@ -38,20 +38,20 @@ export default function useVotingContract(account, electionIdOverride = null) {
     if (!window.ethereum) return null;
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
       const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
       return {
-        provider,
         getElectionManager: async (needsSigner = false) => {
           if (needsSigner) {
-            const signer = await provider.getSigner();
+            const writeProvider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await writeProvider.getSigner();
             return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, signer);
           }
           return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, readProvider);
         },
         getVoting: async (needsSigner = false) => {
           if (needsSigner) {
-            const signer = await provider.getSigner();
+            const writeProvider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await writeProvider.getSigner();
             return new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, signer);
           }
           return new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, readProvider);

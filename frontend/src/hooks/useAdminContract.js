@@ -24,15 +24,16 @@ export default function useAdminContract(account) {
     if (!window.ethereum || !account) return null;
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
       const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
       return {
         getElectionManager: async () => {
-          const signer = await provider.getSigner();
+          const writeProvider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await writeProvider.getSigner();
           return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, signer);
         },
         getVoting: async () => {
-          const signer = await provider.getSigner();
+          const writeProvider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await writeProvider.getSigner();
           return new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, signer);
         },
         getElectionManagerRead: async () => {

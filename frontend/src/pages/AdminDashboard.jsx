@@ -42,6 +42,7 @@ export default function AdminDashboard() {
     candidates,
     electionPhase,
     refreshData,
+    refreshElections,
     loading: dataLoading,
   } = useVotingContract(account);
 
@@ -83,6 +84,14 @@ export default function AdminDashboard() {
     electionId: '',
     addresses: '',
   });
+
+  // ─── Auto-restore admin login ─────────────────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem('cipherballot_token');
+    if (token) {
+      setBackendAdmin({ restored: true });
+    }
+  }, []);
 
   // ─── Check admin status ───────────────────────────────────────────────
   useEffect(() => {
@@ -168,7 +177,8 @@ export default function AdminDashboard() {
     if (result) {
       setSuccessMsg(`Election created successfully! ID: ${result}`);
       setElectionForm({ name: '', startDate: '', startTime: '', endDate: '', endTime: '' });
-      await refreshData();
+      await refreshElections(); // Refreshes the main list of elections
+      await refreshData(); // Refreshes candidates for the current election
     }
   };
 

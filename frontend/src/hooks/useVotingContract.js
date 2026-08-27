@@ -294,6 +294,7 @@ export default function useVotingContract(account, electionIdOverride = null) {
     getResults,
     resetTxStatus,
     refreshData: fetchElectionData,
+    refreshElections: fetchElections,
 
     // Status
     loading,

@@ -5,7 +5,7 @@ import {
   VOTING_CONTRACT_ADDRESS,
   ELECTION_MANAGER_ABI,
   VOTING_ABI,
-  SEPOLIA_RPC_URL,
+  MONAD_RPC_URL,
 } from '../utils/contracts';
 
 /**
@@ -24,7 +24,7 @@ export default function useAdminContract(account) {
     if (!window.ethereum || !account) return null;
 
     try {
-      const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+      const readProvider = new ethers.JsonRpcProvider(MONAD_RPC_URL);
       return {
         getElectionManager: async () => {
           const writeProvider = new ethers.BrowserProvider(window.ethereum);

@@ -80,5 +80,5 @@ export const PHASE_COLORS = {
 };
 
 // ─── Network Config ─────────────────────────────────────────────────────────
-export const SEPOLIA_CHAIN_ID = '0xaa36a7'; // 11155111
-export const SEPOLIA_RPC_URL = 'https://ethereum-sepolia-rpc.publicnode.com';
+export const MONAD_CHAIN_ID = '0x279f'; // 10143
+export const MONAD_RPC_URL = 'https://testnet-rpc.monad.xyz';

@@ -27,6 +27,11 @@ module.exports = {
       accounts: PRIVATE_KEY !== "0x" + "0".repeat(64) ? [PRIVATE_KEY] : [],
       chainId: 11155111,
     },
+    monadTestnet: {
+      url: "https://rpc-testnet.monadinfra.com",
+      accounts: PRIVATE_KEY !== "0x" + "0".repeat(64) ? [PRIVATE_KEY] : [],
+      chainId: 10143,
+    },
   },
 
   etherscan: {

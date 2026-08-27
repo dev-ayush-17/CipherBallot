@@ -5,7 +5,7 @@ import {
   VOTING_CONTRACT_ADDRESS,
   ELECTION_MANAGER_ABI,
   VOTING_ABI,
-  MONAD_RPC_URL,
+  SEPOLIA_RPC_URL,
 } from '../utils/contracts';
 
 /**
@@ -24,7 +24,7 @@ export default function useAdminContract(account) {
     if (!window.ethereum || !account) return null;
 
     try {
-      const readProvider = new ethers.JsonRpcProvider(MONAD_RPC_URL);
+      const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
       return {
         getElectionManager: async () => {
           const writeProvider = new ethers.BrowserProvider(window.ethereum);
@@ -82,30 +82,50 @@ export default function useAdminContract(account) {
   // ─── Create Election ──────────────────────────────────────────────────
   const createElection = useCallback(
     async (name, startTime, endTime) => {
-      if (!contracts) return null;
+      if (!contracts || !account) return null;
       try {
         setLoading(true);
         setTxStatus('pending');
         setError(null);
 
-        const em = await contracts.getElectionManager();
-        const tx = await em.createElection(name, startTime, endTime);
-        setTxHash(tx.hash);
+        const emRead = await contracts.getElectionManagerRead();
+        
+        // Build transaction data using the working read provider
+        const txData = await emRead.createElection.populateTransaction(name, startTime, endTime);
+        
+        // Estimate gas using the working read provider
+        const gasLimit = await emRead.createElection.estimateGas(name, startTime, endTime, { from: account });
+        
+        // Bypass BrowserProvider entirely and send the raw request to MetaMask
+        const txHash = await window.ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: account,
+            to: ELECTION_MANAGER_ADDRESS,
+            data: txData.data,
+            gas: '0x' + gasLimit.toString(16)
+          }]
+        });
+        
+        setTxHash(txHash);
+        
+        // Wait for confirmation using the working read provider
+        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+        const receipt = await provider.waitForTransaction(txHash);
 
-        const receipt = await tx.wait();
         if (receipt.status === 1) {
           setTxStatus('confirmed');
           // Parse the ElectionCreated event to get the electionId
           const log = receipt.logs.find((l) => {
             try {
-              const parsed = em.interface.parseLog(l);
+              const parsed = emRead.interface.parseLog(l);
               return parsed?.name === 'ElectionCreated';
             } catch {
               return false;
             }
           });
           if (log) {
-            const parsed = em.interface.parseLog(log);
+            const parsed = emRead.interface.parseLog(log);
             return Number(parsed.args.electionId);
           }
           return true;
@@ -121,7 +141,7 @@ export default function useAdminContract(account) {
         setLoading(false);
       }
     },
-    [contracts]
+    [contracts, account]
   );
 
   // ─── Start Election ───────────────────────────────────────────────────

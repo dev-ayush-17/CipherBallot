@@ -5,6 +5,7 @@ import {
   VOTING_CONTRACT_ADDRESS,
   ELECTION_MANAGER_ABI,
   VOTING_ABI,
+  SEPOLIA_RPC_URL,
 } from '../utils/contracts';
 
 /**
@@ -23,18 +24,20 @@ export default function useAdminContract(account) {
     if (!window.ethereum || !account) return null;
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
       return {
         getElectionManager: async () => {
-          const signer = await provider.getSigner();
+          const writeProvider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await writeProvider.getSigner();
           return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, signer);
         },
         getVoting: async () => {
-          const signer = await provider.getSigner();
+          const writeProvider = new ethers.BrowserProvider(window.ethereum);
+          const signer = await writeProvider.getSigner();
           return new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_ABI, signer);
         },
         getElectionManagerRead: async () => {
-          return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, provider);
+          return new ethers.Contract(ELECTION_MANAGER_ADDRESS, ELECTION_MANAGER_ABI, readProvider);
         },
       };
     } catch (err) {
@@ -54,8 +57,12 @@ export default function useAdminContract(account) {
     if (!contracts || !account) return false;
     try {
       const em = await contracts.getElectionManagerRead();
-      return await em.admins(account);
-    } catch {
+      console.log("[DEBUG] Checking admin status for:", account, "on contract:", await em.getAddress());
+      const result = await em.admins(account);
+      console.log("[DEBUG] Admin result from contract:", result);
+      return result;
+    } catch (err) {
+      console.error("[DEBUG] checkIsAdmin failed with error:", err);
       return false;
     }
   }, [contracts, account]);
@@ -75,30 +82,50 @@ export default function useAdminContract(account) {
   // ─── Create Election ──────────────────────────────────────────────────
   const createElection = useCallback(
     async (name, startTime, endTime) => {
-      if (!contracts) return null;
+      if (!contracts || !account) return null;
       try {
         setLoading(true);
         setTxStatus('pending');
         setError(null);
 
-        const em = await contracts.getElectionManager();
-        const tx = await em.createElection(name, startTime, endTime);
-        setTxHash(tx.hash);
+        const emRead = await contracts.getElectionManagerRead();
+        
+        // Build transaction data using the working read provider
+        const txData = await emRead.createElection.populateTransaction(name, startTime, endTime);
+        
+        // Estimate gas using the working read provider
+        const gasLimit = await emRead.createElection.estimateGas(name, startTime, endTime, { from: account });
+        
+        // Bypass BrowserProvider entirely and send the raw request to MetaMask
+        const txHash = await window.ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: account,
+            to: ELECTION_MANAGER_ADDRESS,
+            data: txData.data,
+            gas: '0x' + gasLimit.toString(16)
+          }]
+        });
+        
+        setTxHash(txHash);
+        
+        // Wait for confirmation using the working read provider
+        const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+        const receipt = await provider.waitForTransaction(txHash);
 
-        const receipt = await tx.wait();
         if (receipt.status === 1) {
           setTxStatus('confirmed');
           // Parse the ElectionCreated event to get the electionId
           const log = receipt.logs.find((l) => {
             try {
-              const parsed = em.interface.parseLog(l);
+              const parsed = emRead.interface.parseLog(l);
               return parsed?.name === 'ElectionCreated';
             } catch {
               return false;
             }
           });
           if (log) {
-            const parsed = em.interface.parseLog(log);
+            const parsed = emRead.interface.parseLog(log);
             return Number(parsed.args.electionId);
           }
           return true;
@@ -114,7 +141,7 @@ export default function useAdminContract(account) {
         setLoading(false);
       }
     },
-    [contracts]
+    [contracts, account]
   );
 
   // ─── Start Election ───────────────────────────────────────────────────

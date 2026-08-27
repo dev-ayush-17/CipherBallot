@@ -16,6 +16,7 @@ const authRoutes = require('./routes/auth');
 const voterRoutes = require('./routes/voters');
 const adminRoutes = require('./routes/admin');
 const candidateRoutes = require('./routes/candidates');
+const uploadRoutes = require('./routes/upload');
 
 // Initialize Express app
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/voters', voterRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/candidates', candidateRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // ─── Health Check ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

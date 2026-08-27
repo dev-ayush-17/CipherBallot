@@ -183,26 +183,21 @@ export default function AdminDashboard() {
   };
 
   const uploadToPinata = async (file) => {
-    const jwt = import.meta.env.VITE_PINATA_JWT;
-    
-    if (!jwt) {
-      throw new Error('Pinata JWT missing in .env (VITE_PINATA_JWT)');
-    }
-
     const formData = new FormData();
     formData.append('file', file);
 
-    const res = await fetch(`https://api.pinata.cloud/pinning/pinFileToIPFS`, {
-      method: 'POST',
+    const token = localStorage.getItem('cipherballot_token');
+    
+    // We use the backend API to upload so the Pinata API key is kept secret on the server
+    const res = await api.post('/upload', formData, {
       headers: {
-        Authorization: `Bearer ${jwt}`,
-      },
-      body: formData,
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}`
+      }
     });
     
-    if (!res.ok) throw new Error('Failed to upload image to Pinata IPFS');
-    const data = await res.json();
-    return `https://gateway.pinata.cloud/ipfs/${data.IpfsHash}`;
+    if (!res.data.success) throw new Error('Failed to upload image via backend');
+    return res.data.data.url;
   };
 
   const handleRegisterCandidate = async (e) => {

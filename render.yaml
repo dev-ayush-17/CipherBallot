@@ -1,0 +1,51 @@
+services:
+  # ─── BACKEND SERVICE ───────────────────────────────────────────────────────
+  - type: web
+    name: cipherballot-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5002
+      - key: MONGODB_URI
+        sync: false # You will provide this in the Render Dashboard
+      - key: JWT_SECRET
+        generateValue: true # Render will auto-generate a secure random string
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: GOOGLE_CLIENT_ID
+        value: placeholder
+      - key: GOOGLE_CLIENT_SECRET
+        value: placeholder
+      - key: GOOGLE_CALLBACK_URL
+        value: placeholder
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: college.edu
+      - key: FRONTEND_URL
+        value: '*' # Allow all origins, or replace with final frontend URL
+      - key: PINATA_JWT
+        sync: false # You will provide this in the Render Dashboard
+
+  # ─── FRONTEND SERVICE ──────────────────────────────────────────────────────
+  - type: web
+    name: cipherballot-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    # Optional: Configure client-side routing for React (SPAs)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false # Set this to your Backend URL + /api (e.g. https://cipherballot-backend.onrender.com/api)
+      - key: VITE_ELECTION_MANAGER_ADDRESS
+        value: '0x41f46B902383e664FE01febB9E090fbAd3462c19'
+      - key: VITE_VOTING_CONTRACT_ADDRESS
+        value: '0x6905C747792801fd92B41637BacB8d1798A2f54C'

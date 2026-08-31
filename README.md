@@ -6,7 +6,7 @@
 
 *Secure. Transparent. Tamper-Resistant.*
 
-Built by **Team Citadel** — Blockchain Vertical, **Web & Coding Club, NIT Patna**
+Built by **Team Citadel** — **Web & Coding Club, NIT Patna**
 
 [![Solidity](https://img.shields.io/badge/Solidity-Hardhat-363636?logo=solidity)](#)
 [![React](https://img.shields.io/badge/Frontend-React%20%2B%20Tailwind-61DAFB?logo=react)](#)
@@ -17,22 +17,6 @@ Built by **Team Citadel** — Blockchain Vertical, **Web & Coding Club, NIT Patn
 
 ---
 
-## 📖 Table of Contents
-
-- [About the Project](#-about-the-project)
-- [Problem Statement](#-problem-statement)
-- [Key Features](#-key-features)
-- [College Use Case](#-college-use-case)
-- [System Architecture](#-system-architecture)
-- [Application Flow](#-application-flow)
-- [Tech Stack](#-tech-stack)
-- [Repository Structure](#-repository-structure)
-- [Getting Started](#-getting-started)
-- [Team & Responsibilities](#-team--responsibilities)
-- [Roadmap](#-roadmap)
-- [License](#-license)
-
----
 
 ## 🧩 About the Project
 
